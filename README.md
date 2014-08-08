@@ -1,9 +1,10 @@
-# Transciever
+# Transceiver
 
-Transciever adds real-time
+Transceiver adds real-time
 [pubsub](http://en.wikipedia.org/wiki/Publish%E2%80%93subscribe_pattern)
 functionality to your [Express.js](http://expressjs.com) app and optionally
-integrates with an Angular.js frontend. It lets you do things like this on
+integrates with an Angular.js frontend. Based off of ideas (and code) from
+[Sails.js](http://sailsjs.org), Transceiver lets you do things like this on
 your server:
 
     app.get('/api/v1/users', function (req, res, next) {
@@ -25,7 +26,7 @@ your server:
     });
 
 
-And things like this on your Angular (or other) frontend:
+And things like this on your frontend (Angular in this case):
 
     socket.get('/api/v1/users', function(users) {
         console.log("Users are:", users);
@@ -34,4 +35,5 @@ And things like this on your Angular (or other) frontend:
         });
     });
 
-
+Tranceiver is currently considered an *alpha library*, meaning that it's
+not ready for embedding in production projects just yet.
