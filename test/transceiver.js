@@ -110,6 +110,56 @@ describe('transceiver', function() {
   });
 
   describe('http tunneling', function() {
+    it('should fail to interpret a request with no arguments', function(done) {
+      var interpreter = require('../lib/interpret');
+      try {
+        interpreter();
+        done(new Error("Expected error, got none."));
+      } catch (e) {
+        done();
+      }
+    });
+
+    it('should fail to interpret a request with bad callback arguments', function(done) {
+      var interpreter = require('../lib/interpret');
+      try {
+        interpreter(null, null, {}, null, null);
+        done(new Error("Expected error, got none."));
+      } catch (e) {
+        done();
+      }
+    });
+
+    it('should fail to interpret a request with bad request arguments', function(done) {
+      var interpreter = require('../lib/interpret');
+      try {
+        interpreter(null, "as09hasfhasg", null, null, null);
+        done(new Error("Expected error, got none."));
+      } catch (e) {
+        done();
+      }
+    });
+
+    it('should fail to interpret a request with bad request arguments', function(done) {
+      var interpreter = require('../lib/interpret');
+      try {
+        interpreter(null, {}, null, null, null);
+        done(new Error("Expected error, got none."));
+      } catch (e) {
+        done();
+      }
+    });
+
+    it('should fail to interpret a request with bad request arguments', function(done) {
+      var interpreter = require('../lib/interpret');
+      try {
+        interpreter(null, {url: {}}, null, null, null);
+        done(new Error("Expected error, got none."));
+      } catch (e) {
+        done();
+      }
+    });
+
     it('should send an HTTP GET through the socket and get a default Express 404', function(done) {
       createServer(function(app, server) {
         var clientSocket = client(server, { reconnection: false });
@@ -123,6 +173,110 @@ describe('transceiver', function() {
           clientSocket.emit('GET', JSON.stringify(data), function(response) {
             expect(response.statusCode).to.be(404);
             expect(response.body).to.be.a('string');
+            done();
+          });
+
+        });
+      });
+    });
+
+    it('should call the param method to fetch params', function(done) {
+      createServer(function(app, server) {
+
+        app.get('/', function(req, res, next) {
+          expect(req.param('test')).to.be(undefined);
+          res.json({"message": "hello world!"});
+        });
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+
+          var data = {
+            url: "/",
+            data: undefined,
+          };
+
+          clientSocket.emit('GET', JSON.stringify(data), function(response) {
+            expect(response.statusCode).to.be(200);
+            done();
+          });
+
+        });
+      });
+    });
+
+    it('should call the param method to fetch query params', function(done) {
+      createServer(function(app, server) {
+
+        app.get('/', function(req, res, next) {
+          expect(req.param('test')).to.be('1');
+          res.json({"message": "hello world!"});
+        });
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+
+          var data = {
+            url: "/?test=1",
+            data: undefined,
+          };
+
+          clientSocket.emit('GET', JSON.stringify(data), function(response) {
+            expect(response.statusCode).to.be(200);
+            done();
+          });
+
+        });
+      });
+    });
+
+    it('should resolve parameters in the same order as Express', function(done) {
+      createServer(function(app, server) {
+
+        app.get('/:test1', function(req, res, next) {
+          expect(req.param('test1')).to.be('1');
+          expect(req.param('test2')).to.be('2');
+          expect(req.param('test3')).to.be('3');
+          res.json({"message": "hello world!"});
+        });
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+
+          var data = {
+            url: "/1/?test1=2&test2=2",
+            data: {test1: '3', test2: '3', test3: '3'},
+          };
+
+          clientSocket.emit('GET', JSON.stringify(data), function(response) {
+            expect(response.statusCode).to.be(200);
+            done();
+          });
+
+        });
+      });
+    });
+
+    it('should allow requests without a leading slash', function(done) {
+      createServer(function(app, server) {
+
+        app.get('/:test1', function(req, res, next) {
+          expect(req.param('test1')).to.be('1');
+          expect(req.param('test2')).to.be('2');
+          expect(req.param('test3')).to.be('3');
+          res.json({"message": "hello world!"});
+        });
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+
+          var data = {
+            url: "1/?test1=2&test2=2",
+            data: {test1: '3', test2: '3', test3: '3'},
+          };
+
+          clientSocket.emit('GET', JSON.stringify(data), function(response) {
+            expect(response.statusCode).to.be(200);
             done();
           });
 
@@ -205,6 +359,50 @@ describe('transceiver', function() {
             done();
           });
 
+        });
+      });
+    });
+
+    it('should error on improperly formatted json', function(done) {
+      createServer(function(app, server) {
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+          clientSocket.emit('POST', "", function(response) {
+            expect(response.statusCode).to.be(400);
+            done();
+          });
+        });
+      });
+    });
+
+    it('should error on missing URL in JSON', function(done) {
+      createServer(function(app, server) {
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+          clientSocket.emit('POST', "{}", function(response) {
+            expect(response.statusCode).to.be(400);
+            done();
+          });
+        });
+      });
+    });
+
+    it('should disallow multiple send calls', function(done) {
+      createServer(function(app, server) {
+
+        app.post('/', function(req, res, next) {
+          res.send("a");
+          try {
+            res.send("b");
+          } catch (e) {
+            done();
+          }
+        });
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+          clientSocket.emit('POST', JSON.stringify({url: "/"}), function(response) {
+          });
         });
       });
     });

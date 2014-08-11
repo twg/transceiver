@@ -30,6 +30,7 @@
     "mock-req": "^0.1.0",
     "mock-res": "^0.2.1",
     "q": "^1.0.1",
+    "qs": "^1.2.1",
     "socket.io": "^1.0.6"
   },
   "devDependencies": {
