@@ -24,6 +24,7 @@
   "homepage": "https://github.com/twg/transceiver",
   "dependencies": {
     "bunyan": "^1.0.0",
+    "debug": "^1.0.4",
     "lodash": "^2.4.1",
     "merge-defaults": "^0.2.1",
     "mock-req": "^0.1.0",
