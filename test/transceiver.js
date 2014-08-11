@@ -47,7 +47,7 @@ describe('transceiver', function() {
   });
 
   describe('http tunneling', function() {
-    it('should send an HTTP request through the socket and get a 404', function(done) {
+    it('should send an HTTP GET through the socket and get a default Express 404', function(done) {
       createServer(function(app, server) {
         var clientSocket = client(server, { reconnection: false });
         clientSocket.on('connect', function onConnect() {
@@ -67,7 +67,7 @@ describe('transceiver', function() {
       });
     });
 
-    it('should send an HTTP request through the socket and get a 200', function(done) {
+    it('should send an HTTP GET and get a 200', function(done) {
       createServer(function(app, server) {
         app.get('/', function(req, res, next) {
           res.json({"message": "hello world!"});
@@ -84,6 +84,61 @@ describe('transceiver', function() {
           clientSocket.emit('GET', JSON.stringify(data), function(response) {
             expect(response.statusCode).to.be(200);
             expect(response.body.message).to.be('hello world!');
+            done();
+          });
+
+        });
+      });
+    });
+
+    it('should send an HTTP POST and get a 200', function(done) {
+      createServer(function(app, server) {
+        app.post('/', function(req, res, next) {
+          res.json({"message": "hello world!"});
+        });
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+
+          var data = {
+            url: "/",
+            data: undefined,
+          };
+
+          clientSocket.emit('POST', JSON.stringify(data), function(response) {
+            expect(response.statusCode).to.be(200);
+            expect(response.body.message).to.be('hello world!');
+            done();
+          });
+
+        });
+      });
+    });
+
+    it('should send an HTTP POST with query params', function(done) {
+      createServer(function(app, server) {
+        var backendData = {};
+
+        app.post('/path/:id', function(req, res, next) {
+          var id = parseInt(req.param('id'), 10);
+          backendData[id] = req.body;
+          res.json({id: id, data: req.body});
+        });
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+          var id = 5;
+
+          var data = {
+            url: "/path/" + id,
+            data: {"message": "hello world"},
+          };
+
+          clientSocket.emit('POST', JSON.stringify(data), function(response) {
+            expect(response.statusCode).to.be(200);
+            expect(response.body.id).to.be(id);
+            expect(response.body.data.message).to.be('hello world');
+            expect(backendData[id]).to.eql(data.data);
             done();
           });
 
