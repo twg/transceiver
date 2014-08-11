@@ -1,0 +1,3 @@
+--recursive
+-R spec
+--timeout 2000
