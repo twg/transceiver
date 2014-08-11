@@ -407,6 +407,106 @@ describe('transceiver', function() {
       });
     });
 
+    it('should allow subscribing multiple times to a model', function(done) {
+      createServer(function(app, server, transceiver) {
+        var modelName = "model";
+
+        app.get('/resource', function(req, res, next) {
+          res.io.subscribe(modelName, {id: 1}).then(function() {
+            return res.io.subscribe(modelName, {id: 1});
+          }).then(function() {
+            res.json([]);
+          });
+        });
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+          var data = {url: "/resource"};
+
+          clientSocket.emit('GET', JSON.stringify(data), function(response) {
+            expect(response.statusCode).to.be(200);
+            transceiver.manager.getRooms(modelName).then(function(rooms) {
+              expect(rooms).to.eql(["id:1"]);
+              done();
+            });
+          });
+
+        });
+      });
+    });
+
+    it('should allow unsubscribing multiple times from a model', function(done) {
+      createServer(function(app, server, transceiver) {
+        var modelName = "model";
+        var expressIO = null;
+
+        app.get('/resource', function(req, res, next) {
+          expressIO = res.io;
+          res.io.subscribe(modelName, {id: 1}).then(function() {
+            res.json([]);
+          });
+        });
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+          var data = {url: "/resource"};
+
+          clientSocket.emit('GET', JSON.stringify(data), function(response) {
+            expect(response.statusCode).to.be(200);
+            transceiver.manager.getRooms(modelName).then(function(rooms) {
+              expect(rooms).to.eql(["id:1"]);
+              expressIO.unsubscribe(modelName, {id: 1}).then(function() {
+                return expressIO.unsubscribe(modelName, {id: 1});
+              }).then(function() {
+                transceiver.manager.getRooms(modelName).then(function(rooms) {
+                  expect(rooms).to.be.empty();
+                  done();
+                });
+              });
+            });
+          });
+
+        });
+      });
+    });
+
+    it('should allow unsubscribing multiple times from a model while multiple subscriptions exist', function(done) {
+      createServer(function(app, server, transceiver) {
+        var modelName = "model";
+        var expressIO = null;
+
+        app.get('/resource', function(req, res, next) {
+          expressIO = res.io;
+          res.io.subscribe(modelName, {id: 1}).then(function() {
+            res.io.subscribe(modelName, {id: 2}).then(function() {
+              res.json([]);
+            });
+          });
+        });
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+          var data = {url: "/resource"};
+
+          clientSocket.emit('GET', JSON.stringify(data), function(response) {
+            expect(response.statusCode).to.be(200);
+            transceiver.manager.getRooms(modelName).then(function(rooms) {
+              expect(rooms).to.eql(["id:1", "id:2"]);
+              expressIO.unsubscribe(modelName, {id: 2}).then(function() {
+                return expressIO.unsubscribe(modelName, {id: 2});
+              }).then(function() {
+                transceiver.manager.getRooms(modelName).then(function(rooms) {
+                  expect(rooms).to.eql(["id:1"]);
+                  done();
+                });
+              });
+            });
+          });
+
+        });
+      });
+    });
+
     it('should unsubscribe automatically on disconnection', function(done) {
       createServer(function(app, server, transceiver) {
         var modelName = "model";
