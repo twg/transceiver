@@ -126,37 +126,11 @@ describe('transceiver', function() {
         interpreter(null, null, {}, null, null);
         done(new Error("Expected error, got none."));
       } catch (e) {
-        done();
-      }
-    });
-
-    it('should fail to interpret a request with bad request arguments', function(done) {
-      var interpreter = require('../lib/interpret');
-      try {
-        interpreter(null, "as09hasfhasg", null, null, null);
-        done(new Error("Expected error, got none."));
-      } catch (e) {
-        done();
-      }
-    });
-
-    it('should fail to interpret a request with bad request arguments', function(done) {
-      var interpreter = require('../lib/interpret');
-      try {
-        interpreter(null, {}, null, null, null);
-        done(new Error("Expected error, got none."));
-      } catch (e) {
-        done();
-      }
-    });
-
-    it('should fail to interpret a request with bad request arguments', function(done) {
-      var interpreter = require('../lib/interpret');
-      try {
-        interpreter(null, {url: {}}, null, null, null);
-        done(new Error("Expected error, got none."));
-      } catch (e) {
-        done();
+        if (e.toString().indexOf("callback") !== -1) {
+          done();
+        } else {
+          done(new Error("Expected the word 'callback' in error."));
+        }
       }
     });
 
@@ -387,6 +361,18 @@ describe('transceiver', function() {
       });
     });
 
+    it('should error on improper URL in JSON', function(done) {
+      createServer(function(app, server) {
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+          clientSocket.emit('POST', "{\"url\": {}}", function(response) {
+            expect(response.statusCode).to.be(400);
+            done();
+          });
+        });
+      });
+    });
+
     it('should disallow multiple send calls', function(done) {
       createServer(function(app, server) {
 
@@ -605,7 +591,35 @@ describe('transceiver', function() {
       });
     });
 
-    it('should allow subscribing multiple times to a model', function(done) {
+    it('should allow subscribing multiple times to a model without params', function(done) {
+      createServer(function(app, server, transceiver) {
+        var modelName = "model";
+
+        app.get('/resource', function(req, res, next) {
+          res.io.subscribe(modelName).then(function() {
+            return res.io.subscribe(modelName);
+          }).then(function() {
+            res.json([]);
+          });
+        });
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+          var data = {url: "/resource"};
+
+          clientSocket.emit('GET', JSON.stringify(data), function(response) {
+            expect(response.statusCode).to.be(200);
+            transceiver.manager.getRooms(modelName).then(function(rooms) {
+              expect(rooms).to.be.empty();
+              done();
+            });
+          });
+
+        });
+      });
+    });
+
+    it('should allow subscribing multiple times to a model with params', function(done) {
       createServer(function(app, server, transceiver) {
         var modelName = "model";
 
