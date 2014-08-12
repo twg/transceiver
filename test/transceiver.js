@@ -393,6 +393,234 @@ describe('transceiver', function() {
       });
     });
 
+    it('should not do anything on writes to the socket', function(done) {
+      createServer(function(app, server) {
+
+        app.post('/', function(req, res, next) {
+          res.write("a");
+          res.write("b");
+          res.send("");
+        });
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+          clientSocket.emit('POST', JSON.stringify({url: "/"}), function(response) {
+            if (response.body === "") {
+              done();
+            } else {
+              done(new Error("Expected response body to be ab, got " + response.body));
+            }
+          });
+        });
+      });
+    });
+
+    it('should end the request', function(done) {
+      createServer(function(app, server) {
+
+        app.post('/', function(req, res, next) {
+          res.end();
+        });
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+          clientSocket.emit('POST', JSON.stringify({url: "/"}), function(response) {
+            if (response.body === "" && response.statusCode === 200) {
+              done();
+            } else {
+              done(new Error("Expected empty body and 200 status code."));
+            }
+          });
+        });
+      });
+    });
+
+    it('should set the status code', function(done) {
+      createServer(function(app, server) {
+
+        app.post('/', function(req, res, next) {
+          res.status(123);
+          res.end();
+        });
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+          clientSocket.emit('POST', JSON.stringify({url: "/"}), function(response) {
+            if (response.body === "" && response.statusCode === 123) {
+              done();
+            } else {
+              done(new Error("Expected empty body and 123 status code."));
+            }
+          });
+        });
+      });
+    });
+
+    it('should allow for redirects', function(done) {
+      createServer(function(app, server) {
+
+        app.post('/', function(req, res, next) {
+          res.redirect("/other");
+        });
+        app.post('/other', function(req, res, next) {
+          res.status(200);
+          res.end("other");
+        });
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+          clientSocket.emit('POST', JSON.stringify({url: "/"}), function(response) {
+            if (response.body === "other" && response.statusCode === 200) {
+              done();
+            } else {
+              done(new Error("Expected 'other' body."));
+            }
+          });
+        });
+      });
+    });
+
+    it('should disallow redirects if already sent', function(done) {
+      createServer(function(app, server) {
+
+        app.post('/', function(req, res, next) {
+          res.end("done done");
+          try {
+            res.redirect("/other");
+          } catch (e) {
+            return done();
+          }
+          done(new Error("Expected an exception, got nothing."));
+        });
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+          clientSocket.emit('POST', JSON.stringify({url: "/"}), function(response) {
+          });
+        });
+      });
+    });
+
+    it('should disallow redirects to unhandlable domains', function(done) {
+      createServer(function(app, server) {
+
+        app.post('/', function(req, res, next) {
+          try {
+            res.redirect("http://google.com");
+          } catch (e) {
+            return done();
+          }
+          done(new Error("Expected an exception, got nothing."));
+        });
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+          clientSocket.emit('POST', JSON.stringify({url: "/"}), function(response) {
+          });
+        });
+      });
+    });
+
+    it('should allow use of the jsonp function (ugh)', function(done) {
+      createServer(function(app, server) {
+        app.get('/', function(req, res, next) {
+          res.jsonp({"message": "hello world!"});
+        });
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+
+          var data = {
+            url: "/",
+            data: undefined,
+          };
+
+          clientSocket.emit('GET', JSON.stringify(data), function(response) {
+            expect(response.statusCode).to.be(200);
+            expect(response.body.message).to.be('hello world!');
+            done();
+          });
+
+        });
+      });
+    });
+
+    it('should set headers', function(done) {
+      createServer(function(app, server) {
+        app.get('/', function(req, res, next) {
+          res.header("myHeader", "myValue");
+          res.json({"message": "hello world!"});
+        });
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+
+          var data = {
+            url: "/",
+            data: undefined,
+          };
+
+          clientSocket.emit('GET', JSON.stringify(data), function(response) {
+            expect(response.statusCode).to.be(200);
+            expect(response.body.message).to.be('hello world!');
+            expect(response.headers.myHeader).to.eql("myValue");
+            done();
+          });
+
+        });
+      });
+    });
+
+    it('should get headers', function(done) {
+      createServer(function(app, server) {
+        app.get('/', function(req, res, next) {
+          res.header("myHeader", "myValue");
+          if (res.header('myHeader') === "myValue") {
+            done();
+          } else {
+            done(new Error("Expected header value to match."));
+          }
+        });
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+
+          var data = {
+            url: "/",
+            data: undefined,
+          };
+
+          clientSocket.emit('GET', JSON.stringify(data), function(response) {
+          });
+        });
+      });
+    });
+
+    it('should throw an exception for unimplemented methods', function(done) {
+      createServer(function(app, server) {
+        app.get('/', function(req, res, next) {
+          try {
+            res.download();
+            done(new Error("Expected exception, got nothing."));
+          } catch (e) {
+            return done();
+          }
+        });
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+
+          var data = {
+            url: "/",
+            data: undefined,
+          };
+
+          clientSocket.emit('GET', JSON.stringify(data), function(response) {
+          });
+        });
+      });
+    });
+
   });
 
   describe('subscription manager', function() {
@@ -1115,6 +1343,306 @@ describe('transceiver', function() {
             });
 
             expressIO.onObjectDeleted(modelName, models[0]);
+          });
+        });
+      });
+    });
+  });
+  describe('global collection observation', function() {
+
+    it('should receive `create` messages for new models', function(done) {
+      createServer(function(app, server, transceiver) {
+        var modelName = "model";
+        var models = [
+          {id: 1, color: 'blue', data: 1},
+          {id: 2, color: 'blue', data: 2},
+          {id: 3, color: 'green', data: 3},
+          {id: 4, color: 'green', data: 4},
+        ];
+        var newModel = {id: 5, color: 'orange', data: 5};
+
+        app.get('/resource', function(req, res, next) {
+          res.io.subscribe(modelName).then(function() {
+            res.json(models);
+          });
+        });
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+          var data = {url: "/resource"};
+
+          clientSocket.emit('GET', JSON.stringify(data), function(response) {
+            expect(response.statusCode).to.be(200);
+            expect(response.body).to.eql(models);
+
+            clientSocket.on('create', function(notification) {
+              expect(notification.model).to.eql(modelName);
+              expect(notification.data).to.eql(newModel);
+              done();
+            });
+
+            transceiver.onObjectCreated(modelName, newModel);
+          });
+        });
+      });
+    });
+
+    it('should receive `destroy` messages for deleted models', function(done) {
+      createServer(function(app, server, transceiver) {
+        var modelName = "model";
+        var models = [
+          {id: 1, color: 'blue', data: 1},
+          {id: 2, color: 'blue', data: 2},
+          {id: 3, color: 'green', data: 3},
+          {id: 4, color: 'green', data: 4},
+        ];
+
+        app.get('/resource', function(req, res, next) {
+          res.io.subscribe(modelName).then(function() {
+            res.json(models);
+          });
+        });
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+          var data = {url: "/resource"};
+
+          clientSocket.emit('GET', JSON.stringify(data), function(response) {
+            expect(response.statusCode).to.be(200);
+            expect(response.body).to.eql(models);
+
+            clientSocket.on('destroy', function(notification) {
+              expect(notification.model).to.eql(modelName);
+              expect(notification.data).to.eql(models[0]);
+              done();
+            });
+
+            transceiver.onObjectDeleted(modelName, models[0]);
+          });
+        });
+      });
+    });
+
+    it('should receive `update` messages for updated models', function(done) {
+      createServer(function(app, server, transceiver) {
+        var modelName = "model";
+        var models = [
+          {id: 1, color: 'blue', data: 1},
+          {id: 2, color: 'blue', data: 2},
+          {id: 3, color: 'green', data: 3},
+          {id: 4, color: 'green', data: 4},
+        ];
+        var updatedModel = {id: 4, color: 'orange', data: 4};
+
+        app.get('/resource', function(req, res, next) {
+          res.io.subscribe(modelName).then(function() {
+            res.json(models);
+          });
+        });
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+          var data = {url: "/resource"};
+
+          clientSocket.emit('GET', JSON.stringify(data), function(response) {
+            expect(response.statusCode).to.be(200);
+            expect(response.body).to.eql(models);
+
+            clientSocket.on('update', function(notification) {
+              expect(notification.model).to.eql(modelName);
+              expect(notification.data).to.eql(updatedModel);
+              done();
+            });
+
+            transceiver.onObjectUpdated(modelName, models[3], updatedModel);
+          });
+        });
+      });
+    });
+
+  });
+
+  describe('global filtered collection observation', function() {
+
+    it('should receive `create` messages for new models', function(done) {
+      createServer(function(app, server, transceiver) {
+        var modelName = "model";
+        var models = [
+          {id: 1, color: 'blue', data: 1},
+          {id: 2, color: 'blue', data: 2},
+          {id: 3, color: 'green', data: 3},
+          {id: 4, color: 'green', data: 4},
+        ];
+        var newModel = {id: 5, color: 'green', data: 5};
+
+        app.get('/resource/:color', function(req, res, next) {
+          res.io.subscribe(modelName, {color: req.param('color')}).then(function() {
+            res.json(_.filter(models, function(m) { return m.color === req.param('color'); }));
+          });
+        });
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+          var data = {url: "/resource/green"};
+
+          clientSocket.emit('GET', JSON.stringify(data), function(response) {
+            expect(response.statusCode).to.be(200);
+            expect(response.body).to.eql(models.slice(2, 4));
+
+            clientSocket.on('create', function(notification) {
+              expect(notification.model).to.eql(modelName);
+              expect(notification.data).to.eql(newModel);
+              done();
+            });
+
+            transceiver.onObjectCreated(modelName, newModel);
+          });
+        });
+      });
+    });
+
+    it('should receive `enter` messages for updated models', function(done) {
+      createServer(function(app, server, transceiver) {
+        var modelName = "model";
+        var models = [
+          {id: 1, color: 'blue', data: 1},
+          {id: 2, color: 'blue', data: 2},
+          {id: 3, color: 'green', data: 3},
+          {id: 4, color: 'green', data: 4},
+        ];
+        var updatedModel = {id: 4, color: 'blue', data: 4};
+
+        app.get('/resource/:color', function(req, res, next) {
+          res.io.subscribe(modelName, {color: req.param('color')}).then(function() {
+            res.json(_.filter(models, function(m) { return m.color === req.param('color'); }));
+          });
+        });
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+          var data = {url: "/resource/blue"};
+
+          clientSocket.emit('GET', JSON.stringify(data), function(response) {
+            expect(response.statusCode).to.be(200);
+            expect(response.body).to.eql(models.slice(0, 2));
+
+            clientSocket.on('enter', function(notification) {
+              expect(notification.model).to.eql(modelName);
+              expect(notification.data).to.eql(updatedModel);
+              done();
+            });
+
+            transceiver.onObjectUpdated(modelName, models[3], updatedModel);
+          });
+        });
+      });
+    });
+
+    it('should receive `update` messages for updated models', function(done) {
+      createServer(function(app, server, transceiver) {
+        var modelName = "model";
+        var models = [
+          {id: 1, color: 'blue', data: 1},
+          {id: 2, color: 'blue', data: 2},
+          {id: 3, color: 'green', data: 3},
+          {id: 4, color: 'green', data: 4},
+        ];
+        var updatedModel = {id: 4, color: 'orange', data: 4};
+
+        app.get('/resource', function(req, res, next) {
+          res.io.subscribe(modelName).then(function() {
+            res.json(models);
+          });
+        });
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+          var data = {url: "/resource"};
+
+          clientSocket.emit('GET', JSON.stringify(data), function(response) {
+            expect(response.statusCode).to.be(200);
+            expect(response.body).to.eql(models);
+
+            clientSocket.on('update', function(notification) {
+              expect(notification.model).to.eql(modelName);
+              expect(notification.data).to.eql(updatedModel);
+              done();
+            });
+
+            transceiver.onObjectUpdated(modelName, models[3], updatedModel);
+          });
+        });
+      });
+    });
+
+    it('should receive `exit` messages for updated models', function(done) {
+      createServer(function(app, server, transceiver) {
+        var modelName = "model";
+        var models = [
+          {id: 1, color: 'blue', data: 1},
+          {id: 2, color: 'blue', data: 2},
+          {id: 3, color: 'green', data: 3},
+          {id: 4, color: 'green', data: 4},
+        ];
+        var updatedModel = {id: 4, color: 'blue', data: 4};
+
+        app.get('/resource/:color', function(req, res, next) {
+          res.io.subscribe(modelName, {color: req.param('color')}).then(function() {
+            res.json(_.filter(models, function(m) { return m.color === req.param('color'); }));
+          });
+        });
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+          var data = {url: "/resource/green"};
+
+          clientSocket.emit('GET', JSON.stringify(data), function(response) {
+            expect(response.statusCode).to.be(200);
+            expect(response.body).to.eql(models.slice(2, 4));
+
+            clientSocket.on('exit', function(notification) {
+              expect(notification.model).to.eql(modelName);
+              expect(notification.data).to.eql(models[3]);
+              done();
+            });
+
+            transceiver.onObjectUpdated(modelName, models[3], updatedModel);
+          });
+        });
+      });
+    });
+
+    it('should receive `destroy` messages for deleted models', function(done) {
+      createServer(function(app, server, transceiver) {
+        var modelName = "model";
+        var models = [
+          {id: 1, color: 'blue', data: 1},
+          {id: 2, color: 'blue', data: 2},
+          {id: 3, color: 'green', data: 3},
+          {id: 4, color: 'green', data: 4},
+        ];
+
+        app.get('/resource', function(req, res, next) {
+          res.io.subscribe(modelName).then(function() {
+            res.json(models);
+          });
+        });
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+          var data = {url: "/resource"};
+
+          clientSocket.emit('GET', JSON.stringify(data), function(response) {
+            expect(response.statusCode).to.be(200);
+            expect(response.body).to.eql(models);
+
+            clientSocket.on('destroy', function(notification) {
+              expect(notification.model).to.eql(modelName);
+              expect(notification.data).to.eql(models[0]);
+              done();
+            });
+
+            transceiver.onObjectDeleted(modelName, models[0]);
           });
         });
       });
