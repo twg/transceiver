@@ -549,6 +549,7 @@ describe('transceiver', function() {
       createServer(function(app, server) {
         app.get('/', function(req, res, next) {
           res.header("myHeader", "myValue");
+          res.setHeader('myOtherHeader', "myOtherValue");
           res.json({"message": "hello world!"});
         });
 
@@ -564,6 +565,7 @@ describe('transceiver', function() {
             expect(response.statusCode).to.be(200);
             expect(response.body.message).to.be('hello world!');
             expect(response.headers.myHeader).to.eql("myValue");
+            expect(response.headers.myOtherHeader).to.eql("myOtherValue");
             done();
           });
 
@@ -575,10 +577,11 @@ describe('transceiver', function() {
       createServer(function(app, server) {
         app.get('/', function(req, res, next) {
           res.header("myHeader", "myValue");
-          if (res.header('myHeader') === "myValue") {
+          res.setHeader("myHeader2", "myValue2");
+          if (res.header('myHeader') === "myValue" && res.getHeader('myHeader2') === "myValue2") {
             done();
           } else {
-            done(new Error("Expected header value to match."));
+            done(new Error("Expected header values to match."));
           }
         });
 
