@@ -258,6 +258,31 @@ describe('transceiver', function() {
       });
     });
 
+    it('should set IP address and port variables', function(done) {
+      createServer(function(app, server) {
+
+        app.get('/:test1', function(req, res, next) {
+          try {
+            expect(req.ip).to.be.a('string');
+            expect(req.port).to.be.a('string');
+            done();
+          } catch (e) {
+            done(e);
+          }
+        });
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onconnect() {
+          var data = {
+            url: "1/?test1=2&test2=2",
+            data: {test1: '3', test2: '3', test3: '3'},
+          };
+
+          clientSocket.emit('get', JSON.stringify(data), function(response) {});
+        });
+      });
+    });
+
     it('should send an HTTP GET and get a 200', function(done) {
       createServer(function(app, server) {
         app.get('/', function(req, res, next) {
