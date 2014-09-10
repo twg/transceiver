@@ -11,6 +11,7 @@ var request = require('supertest');
 var expect = require('expect.js');
 var transceiver = require('..');
 var _ = require('lodash');
+var utf8 = require('utf8');
 
 // creates a socket.io client for the given server
 function client(srv, nsp, opts){
@@ -21,7 +22,20 @@ function client(srv, nsp, opts){
   var addr = srv.address();
   if (!addr) addr = srv.listen().address();
   var url = 'ws://' + addr.address + ':' + addr.port + (nsp || '');
-  return ioc(url, opts);
+  var clientSocket = ioc(url, opts);
+
+  if (opts['decode'] !== false) {
+    //  Overwrite "emit" to JSON-decode the response for us.
+    var emit = clientSocket.emit;
+    clientSocket.emit = function(name, data, callback) {
+      return emit.bind(clientSocket)(name, data, function(response) {
+        return callback(JSON.parse(utf8.decode(response)));
+      });
+    };
+  }
+
+
+  return clientSocket;
 }
 
 function createServer(options, cb) {
@@ -644,6 +658,59 @@ describe('transceiver', function() {
           };
 
           clientSocket.emit('GET', JSON.stringify(data), function(response) {
+          });
+        });
+      });
+    });
+
+    it('should allow UTF-8 through the socket', function(done) {
+      createServer(function(app, server) {
+        app.get('/', function(req, res, next) {
+          res.json({name: "™"});
+        });
+
+        var data = {
+          url: "/",
+          data: undefined,
+        };
+
+        var clientSocket = client(server, { reconnection: false });
+        clientSocket.on('connect', function onConnect() {
+          clientSocket.emit('GET', JSON.stringify(data), function(response) {
+            expect(response.statusCode).to.be(200);
+            expect(response.body).to.have.property("name", "™");
+            done();
+          });
+        });
+      });
+    });
+
+    it('should encode all data as UTF-8 json over the wire', function(done) {
+      createServer(function(app, server) {
+        app.get('/', function(req, res, next) {
+          res.json({name: "™"});
+        });
+
+        var data = {
+          url: "/",
+          data: undefined,
+        };
+
+        var clientSocket = client(server, { reconnection: false, decode: false });
+        clientSocket.on('connect', function onConnect() {
+          clientSocket.emit('GET', JSON.stringify(data), function(response) {
+            expect(response).to.be.a('string');
+            expect(response).to.not.contain("™");
+
+            var utf8ed = utf8.decode(response);
+            expect(utf8ed).to.be.a('string');
+            expect(utf8ed).to.contain("™");
+
+            var parsed = JSON.parse(utf8ed);
+
+            expect(parsed.statusCode).to.be(200);
+            expect(parsed.body).to.have.property("name", "™");
+            done();
           });
         });
       });
