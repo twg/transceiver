@@ -1117,6 +1117,121 @@ describe('transceiver', function() {
       });
     });
 
+    describe('with passed-in socket ID', function() {
+      it('should fail to add an io object if no socket ID is passed in', function(done) {
+        createServer(function(app, server, transceiver) {
+          var modelName = "model";
+
+          app.get('/resource', function(req, res, next) {
+            if (!res.io) done();
+            else done(new Error("Expected no IO object to be created!"));
+          });
+
+          var clientSocket = client(server, { reconnection: false });
+          clientSocket.on('connect', function onConnect() {
+            request(app)
+              .get('/resource')
+              .expect('Content-Type', /json/)
+              .end(function(err, response) {
+                if (err) throw err;
+              });
+
+          });
+        });
+      });
+
+      it('should fail to add an io object if the socket ID doesn\'t exist', function(done) {
+        createServer(function(app, server, transceiver) {
+          var modelName = "model";
+
+          app.get('/resource', function(req, res, next) {
+            if (!res.io) done();
+            else done(new Error("Expected no IO object to be created!"));
+          });
+
+          var clientSocket = client(server, { reconnection: false });
+          clientSocket.on('connect', function onConnect() {
+            request(app)
+              .get('/resource')
+              .set("X-Transceiver-Socket-ID", "asfasfasf")
+              .expect('Content-Type', /json/)
+              .end(function(err, response) {
+                if (err) throw err;
+              });
+
+          });
+        });
+      });
+
+      it('should subscribe to a model without params', function(done) {
+        createServer(function(app, server, transceiver) {
+          var modelName = "model";
+
+          app.get('/resource', function(req, res, next) {
+            res.io.subscribe(modelName).then(function() {
+              res.json([]);
+            });
+          });
+
+          var clientSocket = client(server, { reconnection: false });
+          clientSocket.on('connect', function onConnect() {
+            var id = clientSocket.io.engine.id;
+
+            request(app)
+              .get('/resource')
+              .set("X-Transceiver-Socket-ID", id)
+              .expect('Content-Type', /json/)
+              .end(function(err, response) {
+                if (err) throw err;
+
+                transceiver.manager.getRooms(modelName).then(function(rooms) {
+                  expect(rooms).to.be.empty();
+                  done();
+                });
+              });
+
+          });
+        });
+      });
+
+      it('should subscribe to multiple param lists', function(done) {
+        createServer(function(app, server, transceiver) {
+          var modelName = "model";
+          var models = [
+            {id: 1, color: 'blue', data: 1},
+            {id: 2, color: 'blue', data: 2},
+            {id: 3, color: 'green', data: 3},
+            {id: 4, color: 'green', data: 4},
+          ];
+
+          var expressIO = null;
+          app.get('/resource', function(req, res, next) {
+            expressIO = res.io;
+
+            res.io.subscribeAll(modelName, models).then(function() {
+              res.json([]);
+            });
+          });
+
+          var clientSocket = client(server, { reconnection: false });
+          clientSocket.on('connect', function onConnect() {
+            var id = clientSocket.io.engine.id;
+            request(app)
+              .get('/resource')
+              .set("X-Transceiver-Socket-ID", id)
+              .expect('Content-Type', /json/)
+              .end(function(err, response) {
+                if (err) throw err;
+                transceiver.manager.getRooms(modelName).then(function(rooms) {
+                  expect(rooms).to.have.length(models.length);
+                  done();
+                });
+              });
+          });
+        });
+      });
+    });
+
   });
 
   describe('collection observation', function() {
