@@ -1,5 +1,5 @@
 {
-  "name": "transceiver",
+  "name": "socketio-transceiver",
   "version": "0.0.1",
   "description": "Real-time pubsub middleware for Express, using Socket.io.",
   "main": "index.js",
@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git@github.com:twg/transceiver.git"
+    "url": "https://github.com/twg/transceiver.git"
   },
   "keywords": [
     "realtime",
