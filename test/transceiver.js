@@ -20,8 +20,10 @@ function client(srv, nsp, opts){
     nsp = null;
   }
   var addr = srv.address();
-  if (!addr) addr = srv.listen().address();
-  var url = 'ws://' + addr.address + ':' + addr.port + (nsp || '');
+  if (!addr) {
+    addr = srv.listen().address();
+  }
+  var url = 'ws://localhost:' + addr.port + (nsp || '');
   var clientSocket = ioc(url, opts);
 
   if (opts['decode'] !== false) {
@@ -56,7 +58,7 @@ function createServer(options, cb) {
 describe('transceiver', function() {
 
   describe('socket.io', function() {
-    
+
     it('should connect to an Express server as middleware', function(done) {
       createServer(function(app, server) {
         var clientSocket = client(server, { reconnection: false });
